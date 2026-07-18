@@ -87,8 +87,9 @@ export interface PatternDef {
   label: string;
 }
 
-/** 全22型。第1部・第2部前半は全網羅、第2部後半は「歌える型」の選定 (A1-3)、
- *  第3部は split 2つ・休符なしの全網羅 6型 (A3-3)。 */
+/** 全31型。第1部・第2部前半は全網羅、第2部後半は「歌える型」の選定 (A1-3)、
+ *  第3部は split 2つ・休符なしの全網羅 6型、第4部は split 複数+休符のうち
+ *  こだまに出題可能な (末尾休符でない) 全網羅 9型 (A3-3)。 */
 export const PATTERNS: PatternDef[] = [
   // 第1部: 4分のみ (1マス目固定・休符数で段階化・全網羅 8型)
   { id: 'hhhh', group: 'pattern_quarter', cells: ['hit', 'hit', 'hit', 'hit'], label: 'タタタタ' },
@@ -115,6 +116,17 @@ export const PATTERNS: PatternDef[] = [
   { id: 'hssh', group: 'pattern_split', cells: ['hit', 'split', 'split', 'hit'], label: 'タン タタ タタ タン' },
   { id: 'hshs', group: 'pattern_split', cells: ['hit', 'split', 'hit', 'split'], label: 'タン タタ タン タタ' },
   { id: 'hhss', group: 'pattern_split', cells: ['hit', 'hit', 'split', 'split'], label: 'タン タン タタ タタ' },
+  // 第4部: split 複数 + 休符 (末尾休符 sshr shsr hssr ssrr srsr sssr は
+  // こだまに出題不能 (A2-5) のため収録しない, A3-3)
+  { id: 'ssrh', group: 'pattern_split', cells: ['split', 'split', 'rest', 'hit'], label: 'タタ タタ ・ タン' },
+  { id: 'srsh', group: 'pattern_split', cells: ['split', 'rest', 'split', 'hit'], label: 'タタ ・ タタ タン' },
+  { id: 'srhs', group: 'pattern_split', cells: ['split', 'rest', 'hit', 'split'], label: 'タタ ・ タン タタ' },
+  { id: 'shrs', group: 'pattern_split', cells: ['split', 'hit', 'rest', 'split'], label: 'タタ タン ・ タタ' },
+  { id: 'hsrs', group: 'pattern_split', cells: ['hit', 'split', 'rest', 'split'], label: 'タン タタ ・ タタ' },
+  { id: 'hrss', group: 'pattern_split', cells: ['hit', 'rest', 'split', 'split'], label: 'タン ・ タタ タタ' },
+  { id: 'srrs', group: 'pattern_split', cells: ['split', 'rest', 'rest', 'split'], label: 'タタ ・ ・ タタ' },
+  { id: 'ssrs', group: 'pattern_split', cells: ['split', 'split', 'rest', 'split'], label: 'タタ タタ ・ タタ' },
+  { id: 'srss', group: 'pattern_split', cells: ['split', 'rest', 'split', 'split'], label: 'タタ ・ タタ タタ' },
 ];
 
 /** 解禁レベル (推奨表示順, A3-1)。hasRest は継続解禁の推奨表示に使う (A1-5)。 */

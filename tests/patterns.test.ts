@@ -26,9 +26,9 @@ import {
 } from '../src/core/patterns';
 
 describe('パターン集合 (A1-3, A3-1, A3-3)', () => {
-  it('合計22パターン・IDは一意', () => {
-    expect(PATTERNS).toHaveLength(22);
-    expect(new Set(PATTERNS.map((p) => p.id)).size).toBe(22);
+  it('合計31パターン・IDは一意', () => {
+    expect(PATTERNS).toHaveLength(31);
+    expect(new Set(PATTERNS.map((p) => p.id)).size).toBe(31);
   });
 
   it('全型が4マスで、1マス目は休符でない (A1-1)', () => {
@@ -38,9 +38,9 @@ describe('パターン集合 (A1-3, A3-1, A3-3)', () => {
     }
   });
 
-  it('解禁レベル2つの内訳: 4分のみ8型 / タタ入り14型 (A3-1)', () => {
+  it('解禁レベル2つの内訳: 4分のみ8型 / タタ入り23型 (A3-1)', () => {
     const sizes = PATTERN_GROUPS.map((g) => patternsInGroup(g.key).length);
-    expect(sizes).toEqual([8, 14]);
+    expect(sizes).toEqual([8, 23]);
   });
 
   it('quarter レベルは細分なし・split レベルは細分1つ以上', () => {
@@ -51,12 +51,19 @@ describe('パターン集合 (A1-3, A3-1, A3-3)', () => {
     }
   });
 
-  it('split 2つの追加型は休符なしの全網羅 6型 (A3-3)', () => {
-    const doubles = PATTERNS.filter((p) => p.cells.filter((c) => c === 'split').length === 2);
-    expect(doubles.map((p) => p.id).sort()).toEqual(
-      ['hhss', 'hshs', 'hssh', 'shhs', 'shsh', 'sshh'],
+  it('split 複数の追加型: 休符なし6型 + 休符あり9型、いずれも末尾休符でない (A3-3)', () => {
+    const multi = PATTERNS.filter((p) => p.cells.filter((c) => c === 'split').length >= 2);
+    expect(multi.map((p) => p.id).sort()).toEqual(
+      [
+        // 休符なし (split 2)
+        'hhss', 'hshs', 'hssh', 'shhs', 'shsh', 'sshh',
+        // split 2 + 休符 1
+        'hrss', 'hsrs', 'shrs', 'srhs', 'srsh', 'ssrh',
+        // split 2 + 休符 2 / split 3 + 休符 1
+        'srrs', 'srss', 'ssrs',
+      ].sort(),
     );
-    for (const p of doubles) expect(p.cells).not.toContain('rest');
+    for (const p of multi) expect(endsWithRest(p.cells)).toBe(false);
   });
 });
 
@@ -169,14 +176,14 @@ describe('scorePatternAttempt (A1-6)', () => {
 });
 
 describe('こだま出題プール (A2-5, A3-2)', () => {
-  it('末尾が休符の型は タ・タ・ (hrhr) を除き除外され、17型が残る', () => {
+  it('末尾が休符の型は タ・タ・ (hrhr) を除き除外され、26型が残る', () => {
     const trailing = ECHO_PATTERNS.filter((p) => endsWithRest(p.cells));
     expect(trailing.map((p) => p.id)).toEqual(['hrhr']); // 例外 (A3-2)
-    expect(ECHO_PATTERNS).toHaveLength(17);
+    expect(ECHO_PATTERNS).toHaveLength(26);
     expect(PATTERNS.filter((p) => endsWithRest(p.cells))).toHaveLength(6);
   });
 
-  it('2レベルとも選択肢に出る: 4分系5型 / タタ系12型', () => {
+  it('2レベルとも選択肢に出る: 4分系5型 / タタ系21型', () => {
     expect(ECHO_PATTERN_GROUPS.map((g) => g.key)).toEqual(['pattern_quarter', 'pattern_split']);
     expect(echoPatternsInGroup('pattern_quarter').map((p) => p.id)).toEqual([
       'hhhh',
@@ -185,7 +192,7 @@ describe('こだま出題プール (A2-5, A3-2)', () => {
       'hrhr',
       'hrrh',
     ]);
-    expect(echoPatternsInGroup('pattern_split')).toHaveLength(12);
+    expect(echoPatternsInGroup('pattern_split')).toHaveLength(21);
   });
 
   it('全出題型は打点2つ以上 (スパン比 s が定義できる)', () => {
