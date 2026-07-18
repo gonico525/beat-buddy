@@ -73,15 +73,10 @@ export function patternIbiSec(cells: GridCell[], smtSec: number): number {
   return hasSplit(cells) ? smtSec * SPLIT_TEMPO_FACTOR : smtSec;
 }
 
-// --- パターン集合と解禁グループ (A1-3, A1-8) --------------------------------
+// --- パターン集合と解禁レベル (A1-3, A3-1) ----------------------------------
 
-export type PatternGroupKey =
-  | 'pattern_gap_0'
-  | 'pattern_gap_1'
-  | 'pattern_gap_2'
-  | 'pattern_gap_3'
-  | 'pattern_split_1'
-  | 'pattern_split_2';
+/** 解禁レベル (A3-1)。旧6グループ (A1-8) を4分系/タタ系の2レベルに統合。 */
+export type PatternGroupKey = 'pattern_quarter' | 'pattern_split';
 
 export interface PatternDef {
   /** マス列を h/r/s で符号化した ID (例 'hhrh')。記録にも使う (A1-7)。 */
@@ -92,36 +87,40 @@ export interface PatternDef {
   label: string;
 }
 
-/** 全16型。L1〜L5 は全網羅、L6 は「歌える型」の選定4つ (A1-3)。 */
+/** 全22型。第1部・第2部前半は全網羅、第2部後半は「歌える型」の選定 (A1-3)、
+ *  第3部は split 2つ・休符なしの全網羅 6型 (A3-3)。 */
 export const PATTERNS: PatternDef[] = [
   // 第1部: 4分のみ (1マス目固定・休符数で段階化・全網羅 8型)
-  { id: 'hhhh', group: 'pattern_gap_0', cells: ['hit', 'hit', 'hit', 'hit'], label: 'タタタタ' },
-  { id: 'hhhr', group: 'pattern_gap_1', cells: ['hit', 'hit', 'hit', 'rest'], label: 'タタタ・' },
-  { id: 'hhrh', group: 'pattern_gap_1', cells: ['hit', 'hit', 'rest', 'hit'], label: 'タタ・タ' },
-  { id: 'hrhh', group: 'pattern_gap_1', cells: ['hit', 'rest', 'hit', 'hit'], label: 'タ・タタ' },
-  { id: 'hhrr', group: 'pattern_gap_2', cells: ['hit', 'hit', 'rest', 'rest'], label: 'タタ・・' },
-  { id: 'hrhr', group: 'pattern_gap_2', cells: ['hit', 'rest', 'hit', 'rest'], label: 'タ・タ・' },
-  { id: 'hrrh', group: 'pattern_gap_2', cells: ['hit', 'rest', 'rest', 'hit'], label: 'タ・・タ' },
-  { id: 'hrrr', group: 'pattern_gap_3', cells: ['hit', 'rest', 'rest', 'rest'], label: 'タ・・・' },
-  // 第2部: 8分の細分 (L5 全網羅 4型 / L6 選定 4型)
-  { id: 'shhh', group: 'pattern_split_1', cells: ['split', 'hit', 'hit', 'hit'], label: 'タタ タン タン タン' },
-  { id: 'hshh', group: 'pattern_split_1', cells: ['hit', 'split', 'hit', 'hit'], label: 'タン タタ タン タン' },
-  { id: 'hhsh', group: 'pattern_split_1', cells: ['hit', 'hit', 'split', 'hit'], label: 'タン タン タタ タン' },
-  { id: 'hhhs', group: 'pattern_split_1', cells: ['hit', 'hit', 'hit', 'split'], label: 'タン タン タン タタ' },
-  { id: 'shhr', group: 'pattern_split_2', cells: ['split', 'hit', 'hit', 'rest'], label: 'タタ タン タン ・' },
-  { id: 'shrh', group: 'pattern_split_2', cells: ['split', 'hit', 'rest', 'hit'], label: 'タタ タン ・ タン' },
-  { id: 'hshr', group: 'pattern_split_2', cells: ['hit', 'split', 'hit', 'rest'], label: 'タン タタ タン ・' },
-  { id: 'hsrh', group: 'pattern_split_2', cells: ['hit', 'split', 'rest', 'hit'], label: 'タン タタ ・ タン' },
+  { id: 'hhhh', group: 'pattern_quarter', cells: ['hit', 'hit', 'hit', 'hit'], label: 'タタタタ' },
+  { id: 'hhhr', group: 'pattern_quarter', cells: ['hit', 'hit', 'hit', 'rest'], label: 'タタタ・' },
+  { id: 'hhrh', group: 'pattern_quarter', cells: ['hit', 'hit', 'rest', 'hit'], label: 'タタ・タ' },
+  { id: 'hrhh', group: 'pattern_quarter', cells: ['hit', 'rest', 'hit', 'hit'], label: 'タ・タタ' },
+  { id: 'hhrr', group: 'pattern_quarter', cells: ['hit', 'hit', 'rest', 'rest'], label: 'タタ・・' },
+  { id: 'hrhr', group: 'pattern_quarter', cells: ['hit', 'rest', 'hit', 'rest'], label: 'タ・タ・' },
+  { id: 'hrrh', group: 'pattern_quarter', cells: ['hit', 'rest', 'rest', 'hit'], label: 'タ・・タ' },
+  { id: 'hrrr', group: 'pattern_quarter', cells: ['hit', 'rest', 'rest', 'rest'], label: 'タ・・・' },
+  // 第2部: 8分の細分1つ (休符なし全網羅 4型 / 休符あり選定 4型)
+  { id: 'shhh', group: 'pattern_split', cells: ['split', 'hit', 'hit', 'hit'], label: 'タタ タン タン タン' },
+  { id: 'hshh', group: 'pattern_split', cells: ['hit', 'split', 'hit', 'hit'], label: 'タン タタ タン タン' },
+  { id: 'hhsh', group: 'pattern_split', cells: ['hit', 'hit', 'split', 'hit'], label: 'タン タン タタ タン' },
+  { id: 'hhhs', group: 'pattern_split', cells: ['hit', 'hit', 'hit', 'split'], label: 'タン タン タン タタ' },
+  { id: 'shhr', group: 'pattern_split', cells: ['split', 'hit', 'hit', 'rest'], label: 'タタ タン タン ・' },
+  { id: 'shrh', group: 'pattern_split', cells: ['split', 'hit', 'rest', 'hit'], label: 'タタ タン ・ タン' },
+  { id: 'hshr', group: 'pattern_split', cells: ['hit', 'split', 'hit', 'rest'], label: 'タン タタ タン ・' },
+  { id: 'hsrh', group: 'pattern_split', cells: ['hit', 'split', 'rest', 'hit'], label: 'タン タタ ・ タン' },
+  // 第3部: 8分の細分2つ・休符なし (全網羅 6型, A3-3)
+  { id: 'sshh', group: 'pattern_split', cells: ['split', 'split', 'hit', 'hit'], label: 'タタ タタ タン タン' },
+  { id: 'shsh', group: 'pattern_split', cells: ['split', 'hit', 'split', 'hit'], label: 'タタ タン タタ タン' },
+  { id: 'shhs', group: 'pattern_split', cells: ['split', 'hit', 'hit', 'split'], label: 'タタ タン タン タタ' },
+  { id: 'hssh', group: 'pattern_split', cells: ['hit', 'split', 'split', 'hit'], label: 'タン タタ タタ タン' },
+  { id: 'hshs', group: 'pattern_split', cells: ['hit', 'split', 'hit', 'split'], label: 'タン タタ タン タタ' },
+  { id: 'hhss', group: 'pattern_split', cells: ['hit', 'hit', 'split', 'split'], label: 'タン タン タタ タタ' },
 ];
 
-/** 解禁グループ (推奨表示順, A1-8)。hasRest は継続解禁の推奨表示に使う (A1-5)。 */
+/** 解禁レベル (推奨表示順, A3-1)。hasRest は継続解禁の推奨表示に使う (A1-5)。 */
 export const PATTERN_GROUPS: { key: PatternGroupKey; kidLabel: string; hasRest: boolean }[] = [
-  { key: 'pattern_gap_0', kidLabel: 'タタタタ', hasRest: false },
-  { key: 'pattern_gap_1', kidLabel: 'おやすみ 1', hasRest: true },
-  { key: 'pattern_gap_2', kidLabel: 'おやすみ 2', hasRest: true },
-  { key: 'pattern_gap_3', kidLabel: 'おやすみ 3', hasRest: true },
-  { key: 'pattern_split_1', kidLabel: 'タタ いり', hasRest: false },
-  { key: 'pattern_split_2', kidLabel: 'タタ と おやすみ', hasRest: true },
+  { key: 'pattern_quarter', kidLabel: 'タン と おやすみ', hasRest: true },
+  { key: 'pattern_split', kidLabel: 'タタ いり', hasRest: true },
 ];
 
 export function patternsInGroup(key: PatternGroupKey): PatternDef[] {
@@ -134,15 +133,22 @@ export function endsWithRest(cells: GridCell[]): boolean {
   return cells[cells.length - 1] === 'rest';
 }
 
+/** 末尾休符でも出題する例外 (A3-2)。打点2つの型は形採点 (A2-4) が1打目と
+ *  最終打点で決まり、末尾休符の有無は測定に影響しない (タ・・タ と同じ条件)。 */
+export const ECHO_TRAILING_REST_EXCEPTIONS: readonly string[] = ['hrhr'];
+
 /** 末尾が休符の型は子の最終打点で終端が定義できず、相対評価 (A2-4) では
- *  測定不能。こだま層の出題プールから除外する (A2-5)。 */
-export const ECHO_PATTERNS: PatternDef[] = PATTERNS.filter((p) => !endsWithRest(p.cells));
+ *  測定不能。こだま層の出題プールから除外する (A2-5)。例外は A3-2 のみ。 */
+export const ECHO_PATTERNS: PatternDef[] = PATTERNS.filter(
+  (p) => !endsWithRest(p.cells) || ECHO_TRAILING_REST_EXCEPTIONS.includes(p.id),
+);
 
 export function echoPatternsInGroup(key: PatternGroupKey): PatternDef[] {
   return ECHO_PATTERNS.filter((p) => p.group === key);
 }
 
-/** 除外後に空になるグループ (L4 タ・・・) はこだまの選択肢にも出さない (A2-5)。 */
+/** 除外後に空になるレベルはこだまの選択肢にも出さない (A2-5)。
+ *  現行の2レベル (A3-1) はいずれも非空。 */
 export const ECHO_PATTERN_GROUPS = PATTERN_GROUPS.filter(
   (g) => echoPatternsInGroup(g.key).length > 0,
 );
@@ -283,7 +289,7 @@ export function scoreEchoShape(
     allPerfect: false,
     ok: false,
   };
-  // 打点1つの型はスパンが定義できないが、末尾休符の除外 (A2-5) 後の
+  // 打点1つの型はスパンが定義できないが、末尾休符の除外 (A2-5, 例外 A3-2) 後の
   // こだまプールは常に2打点以上なので、実運用ではこの分岐に入らない。
   if (!onsetCountMatch || expected.length < 2) return none;
   const e0 = expected[0].offsetSec;

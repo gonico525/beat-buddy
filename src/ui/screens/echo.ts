@@ -4,7 +4,8 @@
 // 応答は音だけ — グリッド・オノマトペ・パルスは出さず (A2-1, A2-2)、子は好きな
 // タイミングで叩き始める (A2-3)。採点は1打目基準の相対比 (scoreEchoShape, A2-4):
 // テンポが目標と違っても形が合えば正解。打数違い・形違い・テンポ極端も罰しない。
-// 末尾休符の型は終端が定義できず出題から除外 (A2-5)。
+// 末尾休符の型は終端が定義できず出題から除外 (A2-5, 例外は タ・タ・ のみ A3-2)。
+// レベルは4分系/タタ系の2つ (A3-1)。出題は直前と同じ型を続けない (A3-5)。
 // 1セッション = 最大 ECHO_MAX_ROUNDS 回の連続試行。⏹ でどのフェーズでも中断可。
 
 import type { App, Screen } from '../app';
@@ -42,6 +43,7 @@ export function echoScreen(app: App): Screen {
   let timers: number[] = [];
   let partner: 'parent-child' | 'solo' = 'parent-child';
   let mode: EchoMode = 'basic';
+  let lastPatternId: string | null = null; // 直前に出題した型 (重複回避, A3-5)
   let session = 0; // 世代カウンタ。cleanup で進め、待機中の非同期継続を無効化する
 
   const root = el('div', { class: 'screen' });
@@ -66,6 +68,8 @@ export function echoScreen(app: App): Screen {
   };
 
   // ふつうモードのパターン生成: IOIはSMT帯。基本=2音均等。発展=3音均等 or 長短。
+  // 発展は直前と同じバリエーションを続けて出さない (A3-5)。
+  let lastBasicIdx = -1;
   function makeBasicPattern(): number[] {
     if (!advanced) return [smtSec];
     const variants: number[][] = [
@@ -74,7 +78,9 @@ export function echoScreen(app: App): Screen {
       [smtSec, smtSec * 2], // 3音・長短
       [smtSec * 2, smtSec], // 3音・短長
     ];
-    return variants[Math.floor(Math.random() * variants.length)];
+    const pool = variants.map((_, i) => i).filter((i) => i !== lastBasicIdx);
+    lastBasicIdx = pool[Math.floor(Math.random() * pool.length)];
+    return variants[lastBasicIdx];
   }
 
   function roundDots(round: number): HTMLElement {
@@ -275,8 +281,11 @@ export function echoScreen(app: App): Screen {
     await ctx.resume(); // ユーザジェスチャ起点 (iOS Safari)
     if (session !== mySession) return;
 
+    // 直前と同じ型は続けて出さない (A3-5)
     const pool = echoPatternsInGroup(group);
-    const def = pool[Math.floor(Math.random() * pool.length)];
+    const candidates = pool.length > 1 ? pool.filter((p) => p.id !== lastPatternId) : pool;
+    const def = candidates[Math.floor(Math.random() * candidates.length)];
+    lastPatternId = def.id;
     // テンポ規則 (A1-4): 4分のみ=SMT / 細分あり=SMT×1.6。型の練習中は固定。
     const ibi = patternIbiSec(def.cells, smtSec);
     const { onsets } = expandGrid(def.cells, ibi);

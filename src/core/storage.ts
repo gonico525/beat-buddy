@@ -9,9 +9,9 @@ export type FeatureKey =
   | 'syncTempo' // 同期: テンポ課題
   | 'syncContinuation' // 同期: 継続
   | 'echoAdvanced' // こだま(3音/長短)
-  | PatternGroupKey; // リズム型の解禁グループ6つ (addendum A1-8)
+  | PatternGroupKey; // リズム型の解禁レベル2つ (addendum A3-1)
 
-/** 推奨表示順の梯子 (§8, addendum A1-8)。強制はしない・表示順のみ。
+/** 推奨表示順の梯子 (§8, addendum A3-1)。強制はしない・表示順のみ。
  *  知覚/全身は常時開放。リズム型も初期状態はすべてロック・前提条件なし。 */
 export const FEATURE_LADDER: { key: FeatureKey; label: string }[] = [
   { key: 'sync', label: 'どうき (あわせてタップ)' },
@@ -19,14 +19,25 @@ export const FEATURE_LADDER: { key: FeatureKey; label: string }[] = [
   { key: 'syncTempo', label: 'どうき: テンポちょうせん' },
   { key: 'syncContinuation', label: 'どうき: つづけてタップ' },
   { key: 'echoAdvanced', label: 'こだま: 3おと・ながみじか' },
-  { key: 'pattern_gap_0', label: 'リズム型 L1 (タタタタ)' },
-  { key: 'pattern_gap_1', label: 'リズム型 L2 (休符1)' },
-  { key: 'pattern_gap_2', label: 'リズム型 L3 (休符2)' },
-  // pattern_gap_3 (タ・・・) は末尾休符のみの型で、こだまの出題から除外 (A2-5)。
-  // キー自体は温存 (既存プロフィールの値は無害) だが解禁UIには出さない。
-  { key: 'pattern_split_1', label: 'リズム型 L5 (タタ入り)' },
-  { key: 'pattern_split_2', label: 'リズム型 L6 (タタ+休符)' },
+  { key: 'pattern_quarter', label: 'リズム型 L1 (タン・休符)' },
+  { key: 'pattern_split', label: 'リズム型 L2 (タタ入り)' },
 ];
+
+/** 旧解禁グループ6つ (A1-8) → 新2レベル (A3-1) の読み替え (A3-4)。
+ *  旧キーのどれかが解禁済みなら対応レベルを解禁扱いで引き継ぐ。 */
+const LEGACY_FEATURE_MAP: Record<string, FeatureKey> = {
+  pattern_gap_0: 'pattern_quarter',
+  pattern_gap_1: 'pattern_quarter',
+  pattern_gap_2: 'pattern_quarter',
+  pattern_gap_3: 'pattern_quarter',
+  pattern_split_1: 'pattern_split',
+  pattern_split_2: 'pattern_split',
+};
+
+/** 保存済みの解禁キー列を現行キーに正規化する (旧キーの読み替え + 重複除去)。 */
+export function migrateFeatures(keys: FeatureKey[] | undefined): FeatureKey[] {
+  return [...new Set((keys ?? []).map((k) => LEGACY_FEATURE_MAP[k] ?? k))];
+}
 
 export interface DeviceData {
   deviceOffsetMs: number;
@@ -80,7 +91,9 @@ export const storage = {
   },
 
   getChildren(): ChildProfile[] {
-    return read<ChildProfile[]>(KEY_CHILDREN, []);
+    const children = read<ChildProfile[]>(KEY_CHILDREN, []);
+    for (const c of children) c.unlockedFeatures = migrateFeatures(c.unlockedFeatures);
+    return children;
   },
   saveChild(child: ChildProfile): void {
     const children = storage.getChildren();
