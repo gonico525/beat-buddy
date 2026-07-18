@@ -180,7 +180,9 @@ export function echoScreen(app: App): Screen {
 
     const buddy = el('div', { class: 'buddy', text: '🦜' });
     const note = el('p', { class: 'kid-note', text: 'きいてね…' });
-    const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onClick: showIntro });
+    // click だと「▶ はじめる」タップの指を離した時に合成される click が
+    // 画面切替後のこのボタンに命中して即中断される。pointerdown を使う (§11)。
+    const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onPointerDown: showIntro });
     stage.replaceChildren(roundDots(round), note, buddy, stopBtn);
 
     const h = player.play(targetIois, {
@@ -294,7 +296,8 @@ export function echoScreen(app: App): Screen {
     const buddy = el('div', { class: 'buddy', text: '🦜' });
     const note = el('p', { class: 'kid-note', text: 'きいてね…' });
     const label = el('p', { class: 'small-note', text: def.label });
-    const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onClick: showIntro });
+    // click 不可 (合成 click の誤爆防止, runBasicTrial と同じ理由)
+    const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onPointerDown: showIntro });
     const grid = gridView(def.cells);
     stage.replaceChildren(roundDots(round), note, grid.root, buddy, label, stopBtn);
 

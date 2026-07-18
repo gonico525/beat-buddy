@@ -138,7 +138,9 @@ export function syncScreen(app: App): Screen {
     const ibi = 60 / currentBpm();
 
     const pad = el('button', { class: 'tap-pad', text: '🥁' });
-    const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onClick: showIntro });
+    // click だと「▶ はじめる」タップの合成 click が切替後のこのボタンに
+    // 命中して即中断されうる。pointerdown を使う (§11)。
+    const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onPointerDown: showIntro });
     stage.replaceChildren(
       el('p', { class: 'kid-note', text: STAGES[stageIdx].label }),
       pad,
@@ -186,7 +188,7 @@ export function syncScreen(app: App): Screen {
 
     const pad = el('button', { class: 'tap-pad', text: '👂' });
     const note = el('p', { class: 'kid-note', text: 'おとを きいてね…' });
-    stage.replaceChildren(note, pad, el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onClick: showIntro }));
+    stage.replaceChildren(note, pad, el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onPointerDown: showIntro }));
 
     let guideBeats = 0;
     const tapTimes: number[] = [];
