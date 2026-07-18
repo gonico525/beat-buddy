@@ -25,10 +25,10 @@ import {
   type GridCell,
 } from '../src/core/patterns';
 
-describe('パターン集合 (A1-3)', () => {
-  it('合計16パターン・IDは一意', () => {
-    expect(PATTERNS).toHaveLength(16);
-    expect(new Set(PATTERNS.map((p) => p.id)).size).toBe(16);
+describe('パターン集合 (A1-3, A3-1, A3-3)', () => {
+  it('合計31パターン・IDは一意', () => {
+    expect(PATTERNS).toHaveLength(31);
+    expect(new Set(PATTERNS.map((p) => p.id)).size).toBe(31);
   });
 
   it('全型が4マスで、1マス目は休符でない (A1-1)', () => {
@@ -38,24 +38,32 @@ describe('パターン集合 (A1-3)', () => {
     }
   });
 
-  it('解禁グループ6つの内訳: 1/3/3/1/4/4 (L1〜L5網羅・L6選定)', () => {
+  it('解禁レベル2つの内訳: 4分のみ8型 / タタ入り23型 (A3-1)', () => {
     const sizes = PATTERN_GROUPS.map((g) => patternsInGroup(g.key).length);
-    expect(sizes).toEqual([1, 3, 3, 1, 4, 4]);
+    expect(sizes).toEqual([8, 23]);
   });
 
-  it('gap グループは休符数・split グループは細分の有無が一致する', () => {
+  it('quarter レベルは細分なし・split レベルは細分1つ以上', () => {
     for (const p of PATTERNS) {
-      const rests = p.cells.filter((c) => c === 'rest').length;
       const splits = p.cells.filter((c) => c === 'split').length;
-      if (p.group.startsWith('pattern_gap_')) {
-        expect(rests).toBe(Number(p.group.slice('pattern_gap_'.length)));
-        expect(splits).toBe(0);
-      } else {
-        expect(splits).toBe(1); // L5/L6 とも split は1つ
-        if (p.group === 'pattern_split_1') expect(rests).toBe(0);
-        else expect(rests).toBe(1);
-      }
+      if (p.group === 'pattern_quarter') expect(splits).toBe(0);
+      else expect(splits).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  it('split 複数の追加型: 休符なし6型 + 休符あり9型、いずれも末尾休符でない (A3-3)', () => {
+    const multi = PATTERNS.filter((p) => p.cells.filter((c) => c === 'split').length >= 2);
+    expect(multi.map((p) => p.id).sort()).toEqual(
+      [
+        // 休符なし (split 2)
+        'hhss', 'hshs', 'hssh', 'shhs', 'shsh', 'sshh',
+        // split 2 + 休符 1
+        'hrss', 'hsrs', 'shrs', 'srhs', 'srsh', 'ssrh',
+        // split 2 + 休符 2 / split 3 + 休符 1
+        'srrs', 'srss', 'ssrs',
+      ].sort(),
+    );
+    for (const p of multi) expect(endsWithRest(p.cells)).toBe(false);
   });
 });
 
@@ -167,22 +175,24 @@ describe('scorePatternAttempt (A1-6)', () => {
   });
 });
 
-describe('こだま出題プール (A2-5)', () => {
-  it('末尾が休符の型は除外され、10型が残る', () => {
-    expect(ECHO_PATTERNS.every((p) => !endsWithRest(p.cells))).toBe(true);
-    expect(ECHO_PATTERNS).toHaveLength(10);
+describe('こだま出題プール (A2-5, A3-2)', () => {
+  it('末尾が休符の型は タ・タ・ (hrhr) を除き除外され、26型が残る', () => {
+    const trailing = ECHO_PATTERNS.filter((p) => endsWithRest(p.cells));
+    expect(trailing.map((p) => p.id)).toEqual(['hrhr']); // 例外 (A3-2)
+    expect(ECHO_PATTERNS).toHaveLength(26);
     expect(PATTERNS.filter((p) => endsWithRest(p.cells))).toHaveLength(6);
   });
 
-  it('空になったグループ (L4 タ・・・) は選択肢から消える', () => {
-    expect(echoPatternsInGroup('pattern_gap_3')).toHaveLength(0);
-    expect(ECHO_PATTERN_GROUPS.map((g) => g.key)).toEqual([
-      'pattern_gap_0',
-      'pattern_gap_1',
-      'pattern_gap_2',
-      'pattern_split_1',
-      'pattern_split_2',
+  it('2レベルとも選択肢に出る: 4分系5型 / タタ系21型', () => {
+    expect(ECHO_PATTERN_GROUPS.map((g) => g.key)).toEqual(['pattern_quarter', 'pattern_split']);
+    expect(echoPatternsInGroup('pattern_quarter').map((p) => p.id)).toEqual([
+      'hhhh',
+      'hhrh',
+      'hrhh',
+      'hrhr',
+      'hrrh',
     ]);
+    expect(echoPatternsInGroup('pattern_split')).toHaveLength(21);
   });
 
   it('全出題型は打点2つ以上 (スパン比 s が定義できる)', () => {
