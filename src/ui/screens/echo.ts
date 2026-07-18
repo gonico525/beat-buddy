@@ -1,22 +1,23 @@
-// こだまレイヤー (requirements §6.4, addendum A1)。呼びかけ↔応答で真似して返す。
+// こだまレイヤー (requirements §6.4, addendum A1/A2)。呼びかけ↔応答で真似して返す。
 // ふつう: 2〜3音の短パターン。判定 (a) オンセット数一致 (b) 各IOI相対誤差 ≤ 0.30。
-// リズム型 (A1-9): 4マスのビートグリッド (hit/rest/split) を1小節鳴らし、続く
-// 無音の応答小節で子が同じ型を叩く (小節の枠が末尾休符の終端を定義する, A1-0)。
-// タップはエンジンが最近傍ターゲット打点と照合し (A1-2)、採点分母は局所IOI
-// (8分は IBI/2, A1-6)。休符位置の打点は記録のみで罰しない。外れも罰しない。
+// リズム型 (A1-9, A2): 4マスのビートグリッド (hit/rest/split) を1小節鳴らして提示。
+// 応答は音だけ — グリッド・オノマトペ・パルスは出さず (A2-1, A2-2)、子は好きな
+// タイミングで叩き始める (A2-3)。採点は1打目基準の相対比 (scoreEchoShape, A2-4):
+// テンポが目標と違っても形が合えば正解。打数違い・形違い・テンポ極端も罰しない。
+// 末尾休符の型は終端が定義できず出題から除外 (A2-5)。
 // 1セッション = 最大 ECHO_MAX_ROUNDS 回の連続試行。⏹ でどのフェーズでも中断可。
 
 import type { App, Screen } from '../app';
 import { el, flashFeedback } from '../dom';
 import { getAudioContext, getEngine, playTapSound } from '../../engine/audio';
 import { PatternPlayer } from '../../engine/pattern-player';
-import { scoreEcho, scoreSync } from '../../core/scoring';
+import { scoreEcho } from '../../core/scoring';
 import {
-  PATTERN_GROUPS,
-  PATTERN_MATCH_R,
+  ECHO_PATTERN_GROUPS,
+  echoPatternsInGroup,
+  expandGrid,
   patternIbiSec,
-  patternsInGroup,
-  scorePatternAttempt,
+  scoreEchoShape,
   type GridCell,
   type PatternGroupKey,
 } from '../../core/patterns';
@@ -26,8 +27,6 @@ import { storage } from '../../core/storage';
 const RESPONSE_TIMEOUT_MS = 8000;
 const ECHO_MAX_ROUNDS = 10; // 1セッションの連続試行数上限 (§12)
 const NEXT_ROUND_DELAY_MS = 1300;
-/** 応答小節の終端後、末尾付近のタップを拾うための余白 (IBI比)。 */
-const PATTERN_TAIL_IBI = 0.6;
 
 type EchoMode = 'basic' | PatternGroupKey;
 
@@ -62,7 +61,6 @@ export function echoScreen(app: App): Screen {
     handle = null;
     patternCancels.forEach((c) => c());
     patternCancels = [];
-    engine.clearPatternTargets();
     timers.forEach((t) => clearTimeout(t));
     timers = [];
   };
@@ -104,7 +102,7 @@ export function echoScreen(app: App): Screen {
         },
       }),
     ];
-    for (const g of PATTERN_GROUPS) {
+    for (const g of ECHO_PATTERN_GROUPS) {
       const locked = !storage.isUnlocked(child, g.key);
       chips.push(
         el('button', {
@@ -147,7 +145,7 @@ export function echoScreen(app: App): Screen {
             ? partner === 'parent-child'
               ? 'よびかけに こたえよう！ まねっこタップ！'
               : 'おなじリズムで タップしてね！'
-            : 'きいたら つづけて おなじリズムで こたえてね！',
+            : 'きいたら すきな ときに おなじリズムで こたえてね！',
       }),
       el('button', { class: 'btn btn-big', text: '▶ はじめる', onPointerDown: () => void runTrial(1) }),
     );
@@ -239,10 +237,10 @@ export function echoScreen(app: App): Screen {
     timers.push(window.setTimeout(finish, RESPONSE_TIMEOUT_MS));
   }
 
-  // --- リズム型 (A1): 呼びかけ小節 (可聴) → 応答小節 (無音・ターゲットのみ) ---
+  // --- リズム型 (A1 + A2): 呼びかけ小節 (可聴・表示あり) → 応答 (音だけ・任意開始) ---
 
-  /** 4マスのグリッド表示。休符も「感じるマス」として見せ、鳴らないマスにも
-   *  パルスの手がかりを点滅で出す (A1-5)。小節頭マスは枠で強調。 */
+  /** 4マスのグリッド表示 (出題フェーズ専用, A2-1)。休符も「感じるマス」として見せ、
+   *  鳴らないマスにもパルスの手がかりを点滅で出す (A1-5)。小節頭マスは枠で強調。 */
   function gridView(cells: GridCell[]) {
     const dots = new Map<string, HTMLElement>();
     const rowEl = el('div', { class: 'grid-row' });
@@ -277,22 +275,19 @@ export function echoScreen(app: App): Screen {
     await ctx.resume(); // ユーザジェスチャ起点 (iOS Safari)
     if (session !== mySession) return;
 
-    const pool = patternsInGroup(group);
+    const pool = echoPatternsInGroup(group);
     const def = pool[Math.floor(Math.random() * pool.length)];
     // テンポ規則 (A1-4): 4分のみ=SMT / 細分あり=SMT×1.6。型の練習中は固定。
     const ibi = patternIbiSec(def.cells, smtSec);
+    const { onsets } = expandGrid(def.cells, ibi);
 
+    // 出題フェーズ (きいてね): 表示・発音は従来どおり (A2-6)
     const buddy = el('div', { class: 'buddy', text: '🦜' });
     const note = el('p', { class: 'kid-note', text: 'きいてね…' });
     const label = el('p', { class: 'small-note', text: def.label });
     const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onClick: showIntro });
     const grid = gridView(def.cells);
     stage.replaceChildren(roundDots(round), note, grid.root, buddy, label, stopBtn);
-
-    const pad = el('button', { class: 'tap-pad', text: '🥁' });
-    let responding = false;
-    let lastTapPerf = -Infinity;
-    const tapContextTimes: number[] = [];
 
     const t0 = ctx.currentTime + 0.5;
     const call = engine.schedulePattern(def.cells, ibi, {
@@ -304,83 +299,72 @@ export function echoScreen(app: App): Screen {
         if (e.sounding) bump(buddy, 'bounce');
       },
     });
-    // 応答小節: 同じグリッドを続く小節に無音で置く。次の小節頭が終端を定義
-    // するので末尾休符も計測できる (A1-0)。視覚パルスは継続提示 (A1-5)。
-    const resp = engine.schedulePattern(def.cells, ibi, {
-      startAt: call.barEndContext,
-      audible: false,
-      onEvent: (e) => {
-        if (session !== mySession) return;
-        grid.flash(e.gridIndex, e.subIndex);
-        if (e.subIndex === 0 && pad.isConnected) bump(pad, 'pulse');
-      },
-    });
-    engine.armPatternTargets(resp.targets, PATTERN_MATCH_R);
-    patternCancels.push(call.cancel, resp.cancel);
+    patternCancels.push(call.cancel);
+
+    // 応答フェーズ (A2-1〜A2-3): グリッド・オノマトペ・パルスは一切出さない。
+    // 「きみのばん！」と太鼓のみ。子は好きなタイミングで叩き始め、採点は
+    // 1打目基準の相対比 (A2-4) なので絶対時刻の基準もエンジン照合も不要。
+    const pad = el('button', { class: 'tap-pad', text: '🥁' });
+    const tapTimes: number[] = []; // performance.now() ms。相対化するので基準は問わない
+    let finished = false;
+    let closeTimer: number | null = null;
+
+    const finish = () => {
+      if (finished || session !== mySession) return;
+      finished = true;
+      const score = scoreEchoShape(onsets, tapTimes.map((t) => t / 1000));
+      storage.log('patternEcho', {
+        round,
+        gridId: def.id,
+        group,
+        ibiMs: Math.round(ibi * 1000),
+        expectedOnsets: onsets.length,
+        tapCount: tapTimes.length,
+        onsetCountMatch: score.onsetCountMatch,
+        scale: score.scale === null ? null : Number(score.scale.toFixed(3)),
+        scaleValid: score.scaleValid,
+        rs: score.perOnset.map((o) => Number(o.r.toFixed(3))),
+        diffsMs: score.perOnset.map((o) => Math.round(o.diffSec * 1000)),
+        grades: score.perOnset.map((o) => o.grade),
+        ok: score.ok,
+        partner,
+      });
+      if (score.ok && score.allPerfect) {
+        player.ding();
+        flashFeedback(stage, '🌟✨', 'こだま ぴったり！', true);
+      } else if (score.ok) {
+        flashFeedback(stage, '✨', 'いいね！');
+      } else {
+        // 罰しない: 打数違い・形違い・テンポ極端も記録のみで中立表示 (A2-4)
+        flashFeedback(stage, '🦜', 'きこえたよ！ つぎ いくよ！');
+      }
+      scheduleNextRound(round);
+    };
 
     pad.addEventListener('pointerdown', (e) => {
-      if (!responding) return;
-      if (e.timeStamp - lastTapPerf < SMT_CONFIG.debounceItiMs) return;
-      lastTapPerf = e.timeStamp;
-      playTapSound();
-      const res = engine.handlePatternTap(e.timeStamp);
-      if (!res) return;
-      tapContextTimes.push(res.tapContextTime);
-      if (res.matched) {
-        const { grade } = scoreSync(res.asynchrony, res.target.expectedIOI);
-        if (grade === 'perfect') flashFeedback(stage, '✨', 'ぴったり！');
-        else if (grade === 'good') flashFeedback(stage, '😊', 'いいね！');
+      if (finished) return;
+      const last = tapTimes[tapTimes.length - 1];
+      if (last !== undefined && e.timeStamp - last < SMT_CONFIG.debounceItiMs) return;
+      playTapSound(); // 自分の動作への反応のみ残す (A2-1)
+      tapTimes.push(e.timeStamp);
+      bump(pad, 'pulse');
+      if (tapTimes.length >= onsets.length) {
+        // 期待数に達したら少し待って締める (余分タップは打数不一致として拾う)
+        if (closeTimer !== null) clearTimeout(closeTimer);
+        closeTimer = window.setTimeout(finish, 900);
+        timers.push(closeTimer);
       }
-      // 外れ・休符位置・余剰は反応なし: 記録のみで罰しない (A1-6)
     });
 
-    // 応答小節頭の少し前にパッドへ切り替える (子が構えられるように)
-    const switchMs = Math.max(0, (call.barEndAudible - ctx.currentTime) * 1000 - 300);
+    // 呼びかけ小節が鳴り終わったら応答表示へ (全型共通の見た目, A2-1)
+    const switchMs = Math.max(0, (call.barEndAudible - ctx.currentTime) * 1000);
     timers.push(
       window.setTimeout(() => {
         if (session !== mySession) return;
-        responding = true;
         note.textContent = 'きみのばん！';
-        stage.replaceChildren(roundDots(round), note, grid.root, pad, label, stopBtn);
+        stage.replaceChildren(roundDots(round), note, pad, stopBtn);
+        timers.push(window.setTimeout(finish, RESPONSE_TIMEOUT_MS));
       }, switchMs),
-    );
-
-    // 応答小節の終端 + 余白で締めて採点
-    const finishMs = Math.max(0, (resp.barEndAudible + PATTERN_TAIL_IBI * ibi - ctx.currentTime) * 1000);
-    timers.push(
-      window.setTimeout(() => {
-        if (session !== mySession) return;
-        responding = false;
-        engine.clearPatternTargets();
-        const score = scorePatternAttempt(
-          resp.targets.map((t) => ({ timeSec: t.audibleTime, expectedIoiSec: t.expectedIOI })),
-          tapContextTimes,
-        );
-        storage.log('patternEcho', {
-          round,
-          gridId: def.id,
-          group,
-          ibiMs: Math.round(ibi * 1000),
-          targetAsyncsMs: score.perTarget.map((t) =>
-            t.asyncSec === null ? null : Math.round(t.asyncSec * 1000),
-          ),
-          grades: score.perTarget.map((t) => t.grade),
-          extraTaps: score.extraTaps,
-          allTargetsHit: score.allTargetsHit,
-          complete: score.complete,
-          partner,
-        });
-        if (score.complete) {
-          player.ding();
-          flashFeedback(stage, '🌟✨', 'こだま ぴったり！', true);
-        } else if (score.allTargetsHit) {
-          // 余剰打点は達成の上乗せに使うだけで罰しない (A1-6b)
-          flashFeedback(stage, '✨', 'いいね！');
-        } else {
-          flashFeedback(stage, '🦜', 'きこえたよ！ つぎ いくよ！');
-        }
-        scheduleNextRound(round);
-      }, finishMs),
     );
   }
 

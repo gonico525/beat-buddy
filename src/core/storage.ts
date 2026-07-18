@@ -22,7 +22,8 @@ export const FEATURE_LADDER: { key: FeatureKey; label: string }[] = [
   { key: 'pattern_gap_0', label: 'リズム型 L1 (タタタタ)' },
   { key: 'pattern_gap_1', label: 'リズム型 L2 (休符1)' },
   { key: 'pattern_gap_2', label: 'リズム型 L3 (休符2)' },
-  { key: 'pattern_gap_3', label: 'リズム型 L4 (休符3)' },
+  // pattern_gap_3 (タ・・・) は末尾休符のみの型で、こだまの出題から除外 (A2-5)。
+  // キー自体は温存 (既存プロフィールの値は無害) だが解禁UIには出さない。
   { key: 'pattern_split_1', label: 'リズム型 L5 (タタ入り)' },
   { key: 'pattern_split_2', label: 'リズム型 L6 (タタ+休符)' },
 ];
