@@ -3,7 +3,7 @@
 
 import type { App, Screen } from '../app';
 import { el } from '../dom';
-import { getEngine, applyDeviceOffsetMs } from '../../engine/audio';
+import { getEngine, applyDeviceOffsetMs, playTapSound } from '../../engine/audio';
 import { DeviceCalCollector, DEVICE_CAL_CONFIG } from '../../core/device-calibration';
 import { SmtCollector, SMT_CONFIG } from '../../core/smt';
 import { storage, FEATURE_LADDER } from '../../core/storage';
@@ -203,6 +203,7 @@ export function settingsScreen(app: App): Screen {
     };
 
     pad.addEventListener('pointerdown', (e) => {
+      playTapSound();
       pad.classList.remove('pulse');
       void pad.offsetWidth;
       pad.classList.add('pulse');
