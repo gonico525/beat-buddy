@@ -78,6 +78,9 @@ h2 {
   justify-content: flex-start;
   align-items: stretch;
   gap: 12px;
+  /* 設定などの一覧画面は縦スクロールを許可 (.stage の touch-action:none を解除)。
+     タップ計測パッド自体は .tap-pad 側の touch-action:none で保護される。 */
+  touch-action: pan-y;
 }
 
 .btn {
@@ -423,10 +426,10 @@ h2 {
   background: var(--accent2);
 }
 
-.gate-options {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
+.gate-input {
+  width: 100%;
+  text-align: center;
+  font-size: 1.3rem;
 }
 
 /* デバッグ */
