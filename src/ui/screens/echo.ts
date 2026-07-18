@@ -1,16 +1,19 @@
 // こだまレイヤー (requirements §6.4)。2〜3音の短パターンを真似して返す。
 // 一致判定: (a) オンセット数一致 (b) 各IOI相対誤差 ≤ 0.30。外れは罰しない。
 // 基本 = 2音・均等。発展 (親解禁) = 3音 / 長短 (1つ倍)。呼びかけ↔応答で親子主役。
+// 1セッション = 最大 ECHO_MAX_ROUNDS 回の連続試行。⏹ でどのフェーズでも中断可。
 
 import type { App, Screen } from '../app';
 import { el, flashFeedback } from '../dom';
-import { getAudioContext } from '../../engine/audio';
+import { getAudioContext, playTapSound } from '../../engine/audio';
 import { PatternPlayer } from '../../engine/pattern-player';
 import { scoreEcho } from '../../core/scoring';
 import { SMT_CONFIG } from '../../core/smt';
 import { storage } from '../../core/storage';
 
 const RESPONSE_TIMEOUT_MS = 8000;
+const ECHO_MAX_ROUNDS = 10; // 1セッションの連続試行数上限 (§12)
+const NEXT_ROUND_DELAY_MS = 1300;
 
 export function echoScreen(app: App): Screen {
   const player = new PatternPlayer(getAudioContext());
@@ -21,6 +24,7 @@ export function echoScreen(app: App): Screen {
   let handle: { cancel(): void } | null = null;
   let timer: number | null = null;
   let partner: 'parent-child' | 'solo' = 'parent-child';
+  let session = 0; // 世代カウンタ。cleanup で進め、待機中の非同期継続を無効化する
 
   const root = el('div', { class: 'screen' });
   const header = el(
@@ -34,8 +38,11 @@ export function echoScreen(app: App): Screen {
   root.append(header, stage);
 
   const cleanup = () => {
+    session++;
     handle?.cancel();
+    handle = null;
     if (timer !== null) clearTimeout(timer);
+    timer = null;
   };
 
   // パターン生成: IOIはSMT帯。基本=2音均等。発展=3音均等 or 長短(1つ倍)。
@@ -48,6 +55,13 @@ export function echoScreen(app: App): Screen {
       [smtSec * 2, smtSec], // 3音・短長
     ];
     return variants[Math.floor(Math.random() * variants.length)];
+  }
+
+  function roundDots(round: number): HTMLElement {
+    return el('p', {
+      class: 'small-note',
+      text: '●'.repeat(round) + '○'.repeat(ECHO_MAX_ROUNDS - round),
+    });
   }
 
   function showIntro(): void {
@@ -71,19 +85,22 @@ export function echoScreen(app: App): Screen {
         class: 'kid-note',
         text: partner === 'parent-child' ? 'よびかけに こたえよう！ まねっこタップ！' : 'おなじリズムで タップしてね！',
       }),
-      el('button', { class: 'btn btn-big', text: '▶ はじめる', onPointerDown: () => void runTrial() }),
+      el('button', { class: 'btn btn-big', text: '▶ はじめる', onPointerDown: () => void runTrial(1) }),
     );
   }
 
-  async function runTrial(): Promise<void> {
+  async function runTrial(round: number): Promise<void> {
     cleanup();
+    const mySession = session;
     await getAudioContext().resume(); // ユーザジェスチャ起点 (iOS Safari)
+    if (session !== mySession) return;
     const targetIois = makePattern();
     const expectedOnsets = targetIois.length + 1;
 
     const buddy = el('div', { class: 'buddy', text: '🦜' });
     const note = el('p', { class: 'kid-note', text: 'きいてね…' });
-    stage.replaceChildren(note, buddy);
+    const stopBtn = el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onClick: showIntro });
+    stage.replaceChildren(roundDots(round), note, buddy, stopBtn);
 
     const h = player.play(targetIois, {
       freq: 880,
@@ -95,16 +112,17 @@ export function echoScreen(app: App): Screen {
     });
     handle = h;
     await h.finished;
+    if (session !== mySession) return;
 
     // 応答フェーズ
     const tapTimes: number[] = [];
     let finished = false;
     const pad = el('button', { class: 'tap-pad', text: '🥁' });
     note.textContent = 'きみのばん！';
-    stage.replaceChildren(note, pad, el('button', { class: 'btn btn-ghost', text: '⏹ おわる', onClick: showIntro }));
+    stage.replaceChildren(roundDots(round), note, pad, stopBtn);
 
     const finish = () => {
-      if (finished) return;
+      if (finished || session !== mySession) return;
       finished = true;
       if (timer !== null) clearTimeout(timer);
       const responseIois: number[] = [];
@@ -113,6 +131,7 @@ export function echoScreen(app: App): Screen {
       }
       const score = scoreEcho(targetIois, responseIois);
       storage.log('echo', {
+        round,
         targetIoisMs: targetIois.map((s) => Math.round(s * 1000)),
         responseIoisMs: responseIois.map((s) => Math.round(s * 1000)),
         onsetCountMatch: score.onsetCountMatch,
@@ -125,15 +144,19 @@ export function echoScreen(app: App): Screen {
         flashFeedback(stage, '🌟✨', 'こだま ぴったり！', true);
       } else {
         // 罰しない: 中立のねぎらいのみ
-        flashFeedback(stage, '🦜', 'きこえたよ！ もういっかい？');
+        flashFeedback(stage, '🦜', 'きこえたよ！ つぎ いくよ！');
       }
-      setTimeout(showNext, 1300);
+      timer = window.setTimeout(() => {
+        if (round < ECHO_MAX_ROUNDS) void runTrial(round + 1);
+        else showDone();
+      }, NEXT_ROUND_DELAY_MS);
     };
 
     pad.addEventListener('pointerdown', (e) => {
       if (finished) return;
       const last = tapTimes[tapTimes.length - 1];
       if (last !== undefined && e.timeStamp - last < SMT_CONFIG.debounceItiMs) return;
+      playTapSound();
       tapTimes.push(e.timeStamp);
       pad.classList.remove('pulse');
       void pad.offsetWidth;
@@ -147,10 +170,11 @@ export function echoScreen(app: App): Screen {
     timer = window.setTimeout(finish, RESPONSE_TIMEOUT_MS);
   }
 
-  function showNext(): void {
+  function showDone(): void {
     stage.replaceChildren(
       el('div', { class: 'buddy', text: '🦜' }),
-      el('button', { class: 'btn btn-big', text: '🔁 もういっかい', onPointerDown: () => void runTrial() }),
+      el('p', { class: 'kid-note', text: 'ぜんぶ できたね！ すごい！' }),
+      el('button', { class: 'btn btn-big', text: '🔁 もういっかい', onPointerDown: () => void runTrial(1) }),
       el('button', { class: 'btn btn-ghost', text: '🏠 おうちへ', onClick: () => app.go('home') }),
     );
   }

@@ -27,7 +27,7 @@ export class PatternPlayer {
     for (const ioi of ioisSec) {
       onsetTimes.push(onsetTimes[onsetTimes.length - 1] + ioi);
     }
-    for (const t of onsetTimes) this.click(t, freq, gain);
+    const oscs = onsetTimes.map((t) => this.click(t, freq, gain));
 
     let cancelled = false;
     const timers: number[] = [];
@@ -54,6 +54,8 @@ export class PatternPlayer {
       cancel: () => {
         cancelled = true;
         timers.forEach((h) => clearTimeout(h));
+        // 未発音のオンセットも即座に止める (途中終了で音を残さない)
+        oscs.forEach((o) => o.stop());
       },
     };
   }
@@ -63,7 +65,7 @@ export class PatternPlayer {
     this.click(this.ctx.currentTime + 0.01, freq, gain);
   }
 
-  private click(time: number, freq: number, peak: number): void {
+  private click(time: number, freq: number, peak: number): OscillatorNode {
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     osc.frequency.value = freq;
@@ -73,5 +75,6 @@ export class PatternPlayer {
     osc.connect(g).connect(this.ctx.destination);
     osc.start(time);
     osc.stop(time + 0.06);
+    return osc;
   }
 }

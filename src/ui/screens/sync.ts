@@ -4,7 +4,7 @@
 
 import type { App, Screen } from '../app';
 import { el, flashFeedback } from '../dom';
-import { getEngine, getAudioContext } from '../../engine/audio';
+import { getEngine, getAudioContext, playTapSound } from '../../engine/audio';
 import { PatternPlayer } from '../../engine/pattern-player';
 import { scoreSync, median, driftRate, CONTINUATION_POSITIVE_DRIFT } from '../../core/scoring';
 import { SMT_CONFIG } from '../../core/smt';
@@ -171,7 +171,10 @@ export function syncScreen(app: App): Screen {
         streak = 0; // 反応なし: 失敗表示・減点なし
       }
     });
-    pad.addEventListener('pointerdown', (e) => engine.handleTap(e.timeStamp));
+    pad.addEventListener('pointerdown', (e) => {
+      playTapSound();
+      engine.handleTap(e.timeStamp);
+    });
     await engine.start();
   }
 
@@ -234,6 +237,7 @@ export function syncScreen(app: App): Screen {
     });
     pad.addEventListener('pointerdown', (e) => {
       if (guideBeats < CONTINUATION_GUIDE_BEATS || finished) return;
+      playTapSound();
       tapTimes.push(e.timeStamp);
       if (tapTimes.length >= CONTINUATION_MAX_TAPS) finish();
     });
