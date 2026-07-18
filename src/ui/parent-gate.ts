@@ -47,38 +47,39 @@ export function openParentGate(onSuccess: () => void): void {
   }
 
   function showMathStep(): void {
-    const a = 2 + Math.floor(Math.random() * 8);
-    const b = 2 + Math.floor(Math.random() * 8);
-    const answer = a + b;
-    const options = new Set<number>([answer]);
-    while (options.size < 3) {
-      const wrong = answer + (Math.floor(Math.random() * 7) - 3);
-      if (wrong !== answer && wrong > 0) options.add(wrong);
-    }
-    const shuffled = [...options].sort(() => Math.random() - 0.5);
+    // 九九の掛け算/割り算を数値入力で一問。選択式の当てずっぽうを防ぎ、
+    // プレリーダーの幼児には解けない難度を保つ (§8, 機構は §12 でチューニング可)。
+    const x = 3 + Math.floor(Math.random() * 7); // 3〜9
+    const y = 3 + Math.floor(Math.random() * 7);
+    const isDivision = Math.random() < 0.5;
+    const question = isDivision ? `${x * y} ÷ ${y} = ?` : `${x} × ${y} = ?`;
+    const answer = isDivision ? x : x * y;
+
+    const input = el('input', {
+      class: 'name-input gate-input',
+      attrs: { type: 'text', inputmode: 'numeric', pattern: '[0-9]*', autocomplete: 'off' },
+    });
+    const submit = () => {
+      const value = input.value.trim();
+      if (value === '') return;
+      if (Number(value) === answer) {
+        close();
+        onSuccess();
+      } else {
+        showMathStep(); // 失敗表示なしで問題を変えて継続
+      }
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    });
     card.replaceChildren(
       el('h2', { text: 'かくにん' }),
-      el('p', { class: 'gate-note', text: `${a} + ${b} = ?` }),
-      el(
-        'div',
-        { class: 'gate-options' },
-        ...shuffled.map((n) =>
-          el('button', {
-            class: 'btn',
-            text: String(n),
-            onClick: () => {
-              if (n === answer) {
-                close();
-                onSuccess();
-              } else {
-                showMathStep(); // 失敗表示なしで問題を変えて継続
-              }
-            },
-          }),
-        ),
-      ),
+      el('p', { class: 'gate-note', text: question }),
+      input,
+      el('button', { class: 'btn', text: 'こたえる', onClick: submit }),
       el('button', { class: 'btn btn-ghost', text: 'やめる', onClick: close }),
     );
+    input.focus();
   }
 
   showHoldStep();
