@@ -1,20 +1,30 @@
 // 永続化 (requirements §10)。localStorage のみ・サーバなし・PIIなし。
 // sessionLog は直近1セッションの async/IOI ログのみ (検証・デバッグ用、件数上限)。
 
+import type { PatternGroupKey } from './patterns';
+
 export type FeatureKey =
   | 'sync' // 同期(基本)
   | 'echo' // こだま(基本)
   | 'syncTempo' // 同期: テンポ課題
   | 'syncContinuation' // 同期: 継続
-  | 'echoAdvanced'; // こだま(3音/長短)
+  | 'echoAdvanced' // こだま(3音/長短)
+  | PatternGroupKey; // リズム型の解禁グループ6つ (addendum A1-8)
 
-/** 推奨表示順の梯子 (§8)。強制はしない・表示順のみ。知覚/全身は常時開放。 */
+/** 推奨表示順の梯子 (§8, addendum A1-8)。強制はしない・表示順のみ。
+ *  知覚/全身は常時開放。リズム型も初期状態はすべてロック・前提条件なし。 */
 export const FEATURE_LADDER: { key: FeatureKey; label: string }[] = [
   { key: 'sync', label: 'どうき (あわせてタップ)' },
   { key: 'echo', label: 'こだま (まねっこ)' },
   { key: 'syncTempo', label: 'どうき: テンポちょうせん' },
   { key: 'syncContinuation', label: 'どうき: つづけてタップ' },
   { key: 'echoAdvanced', label: 'こだま: 3おと・ながみじか' },
+  { key: 'pattern_gap_0', label: 'リズム型 L1 (タタタタ)' },
+  { key: 'pattern_gap_1', label: 'リズム型 L2 (休符1)' },
+  { key: 'pattern_gap_2', label: 'リズム型 L3 (休符2)' },
+  { key: 'pattern_gap_3', label: 'リズム型 L4 (休符3)' },
+  { key: 'pattern_split_1', label: 'リズム型 L5 (タタ入り)' },
+  { key: 'pattern_split_2', label: 'リズム型 L6 (タタ+休符)' },
 ];
 
 export interface DeviceData {

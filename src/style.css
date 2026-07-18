@@ -249,6 +249,61 @@ h2 {
   color: var(--accent);
 }
 
+/* リズム型 (addendum A1): 4マスのビートグリッド。休符も「感じるマス」として
+   見せ、鳴らないマスにも点滅のパルス手がかりを出す (A1-5)。 */
+.grid-row {
+  display: flex;
+  gap: 10px;
+}
+
+.grid-cell {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 小節頭 (1マス目) の枠 = 小節の合図 (A1-5) */
+.grid-cell.grid-head {
+  border: 2px solid rgba(251, 191, 36, 0.55);
+}
+
+.gdot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent2);
+}
+
+.gdot-small {
+  width: 18px;
+  height: 18px;
+}
+
+.gdot-rest {
+  background: transparent;
+  border: 2px dashed var(--muted);
+}
+
+.gdot.on {
+  animation: gdot-flash 0.3s ease-out;
+}
+
+@keyframes gdot-flash {
+  0% {
+    transform: scale(1.5);
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.8);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 16px rgba(251, 191, 36, 0);
+  }
+}
+
 /* ポジティブフィードバック (罰しない: 中立/称賛のみ) */
 .feedback {
   position: absolute;

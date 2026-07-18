@@ -82,6 +82,25 @@ export function debugScreen(app: App): Screen {
     smtCard.append(el('p', { class: 'small-note', text: 'このセッションのSMT計測記録がありません。' }));
   }
 
+  // --- リズム型 (addendum A1-11): ターゲット打点ごとの async と余剰打点 ---
+  const patEntries = log.filter((e) => e.mode === 'patternEcho');
+  const patCard = el('div', { class: 'card' }, el('h2', { text: `リズム型 (n=${patEntries.length})` }));
+  if (patEntries.length > 0) {
+    const lines = patEntries.slice(-20).map((e) => {
+      const asyncs = ((e.data.targetAsyncsMs as (number | null)[]) ?? [])
+        .map((v) => (v === null ? '—' : `${v}`))
+        .join(', ');
+      const mark = e.data.complete ? ' ◎' : e.data.allTargetsHit ? ' ○' : '';
+      return `${e.data.gridId} (IBI ${e.data.ibiMs}ms) async [${asyncs}] ms / 余剰 ${e.data.extraTaps}${mark}`;
+    });
+    patCard.append(
+      el('pre', { class: 'log-pre', text: lines.join('\n') }),
+      el('p', { class: 'small-note', text: '— = タップなし | ◎ 全打点+余剰なし | ○ 全打点 (負=先取り/正=遅れ)' }),
+    );
+  } else {
+    patCard.append(el('p', { class: 'small-note', text: 'まだリズム型の記録がありません。' }));
+  }
+
   // --- 生ログ ---
   const rawCard = el(
     'div',
@@ -90,6 +109,6 @@ export function debugScreen(app: App): Screen {
     el('pre', { class: 'log-pre', text: log.slice(-50).map((e) => `${e.mode}: ${JSON.stringify(e.data)}`).join('\n') || '(空)' }),
   );
 
-  stage.append(histCard, smtCard, rawCard);
+  stage.append(histCard, smtCard, patCard, rawCard);
   return { el: root };
 }
