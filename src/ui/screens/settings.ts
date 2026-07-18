@@ -59,8 +59,12 @@ export function settingsScreen(app: App): Screen {
         ),
       );
     }
-    unlockSection.appendChild(
+    unlockSection.append(
       el('p', { class: 'small-note', text: '※ 知覚・全身は常時開放。順序の強制はありません。' }),
+      el('p', {
+        class: 'small-note',
+        text: '※ 休符入りのリズム型 (L2以降) は「どうき: つづけてタップ」解禁後の練習がおすすめです (強制ではありません)。',
+      }),
     );
 
     const childSection = el(

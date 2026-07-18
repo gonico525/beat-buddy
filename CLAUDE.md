@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 beat-buddy is a web app that develops preschoolers' sense of rhythm in the order perception → synchronization → reproduction. It is a vanilla TypeScript + Vite app with **no framework, no server, no accounts, and no external assets** — all sound is Oscillator-synthesized, persistence is localStorage only, and it works offline.
 
-The source of truth for behavior is `docs/requirements.md` (Japanese). Code comments cite it by section (e.g. `requirements §7`); when changing behavior, check the cited section first and keep the code consistent with it. Comments and docs are written in Japanese; child-facing UI text is hiragana.
+The source of truth for behavior is `docs/requirements.md` (Japanese), plus `docs/addendum-a1-rhythm-patterns.md` for the A1 rhythm-pattern increment (4/4 beat grids with hits/rests/splits). Code comments cite them by section (e.g. `requirements §7`, `addendum A1-6`); when changing behavior, check the cited section first and keep the code consistent with it. Comments and docs are written in Japanese; child-facing UI text is hiragana.
 
 ## Commands
 
@@ -29,13 +29,14 @@ Three strictly ordered layers. Everything scoreable sits on top of the raw signe
 
 ### `src/engine/` — measurement core (framework-free TS)
 
-- `rhythm-engine.ts`: the timing heart. Master clock is `AudioContext.currentTime` — never `Date.now`/`setTimeout` as a timing source. A two-clock scheduler (coarse `setInterval` decides *what*, AudioContext decides *when*) keeps audio sample-accurate regardless of JS jitter. It reconciles three coordinate systems: taps live in `performance.now()` ms (bridged via `getOutputTimestamp()`, with a start-time offset fallback), beats live in AudioContext seconds, and the child *hears* beats `outputLatency` later (fallback: `baseLatency`). `deviceOffset` corrects input latency. `onTap` distributes raw asynchrony only — no pass/fail judgment here; scoring and the debug display attach to the same stream in parallel.
+- `rhythm-engine.ts`: the timing heart. Master clock is `AudioContext.currentTime` — never `Date.now`/`setTimeout` as a timing source. A two-clock scheduler (coarse `setInterval` decides *what*, AudioContext decides *when*) keeps audio sample-accurate regardless of JS jitter. It reconciles three coordinate systems: taps live in `performance.now()` ms (bridged via `getOutputTimestamp()`, with a start-time offset fallback), beats live in AudioContext seconds, and the child *hears* beats `outputLatency` later (fallback: `baseLatency`). `deviceOffset` corrects input latency. `onTap` distributes raw asynchrony only — no pass/fail judgment here; scoring and the debug display attach to the same stream in parallel. A second track (`schedulePattern` / `armPatternTargets` / `handlePatternTap`, addendum A1-2) schedules beat-grid target onsets and matches taps to the nearest target with the same measurement discipline; the per-beat pulse matching is untouched.
 - `pattern-player.ts`: short-pattern playback (echo/perception modes), same AudioContext, schedules all onsets at once.
 - `audio.ts`: singletons for the shared AudioContext and engine. `AudioContext.resume()` must happen inside a user gesture (iOS Safari), which is why `RhythmEngine.start()` is called from tap handlers.
 
 ### `src/core/` — pure policy layer (no side effects, no DOM/audio)
 
 - `scoring.ts`: pure scoring functions. Sync grading uses relative error `r = |async| / IBI` (auto-scales to tempo): `r ≤ 0.15` perfect, `≤ 0.30` good, otherwise `none`. Echo requires onset-count match and every IOI relative error ≤ 0.30. Also `median` and `coefficientOfVariation` stats.
+- `patterns.ts`: the A1 beat-grid layer — 4-cell grids (`hit`/`rest`/`split`), grid expansion to target onsets, the tempo rule (split patterns run at SMT × 1.6), the 16-pattern set in 6 unlock groups, and whole-pattern scoring (`scorePatternAttempt`: one-to-one nearest assignment, local-IOI denominators, extra taps recorded but never punished).
 - `smt.ts` / `device-calibration.ts`: the two calibrations are **different things**. Device calibration (parent, once per device): 100 bpm × 16 beats, discard first 2 taps, median raw async → `deviceOffsetMs`. SMT calibration (per child): free tapping, max 12 taps or 8 s, discard first tap, 120 ms debounce, median ITI clamped to 300–700 ms, converged when CV of last 5 ITIs < 0.20.
 - `storage.ts`: all localStorage access (keys prefixed `beatbuddy:`). Child profiles, device offset, feature unlocks, and a capped single-session log (reset on every app start in `main.ts`). Reads/writes never throw — storage failure degrades silently.
 
