@@ -1,8 +1,9 @@
-// リズム型・休符・細分 (docs/addendum-a1-rhythm-patterns.md)。
+// リズム型・休符・細分 (docs/addendum-a1-rhythm-patterns.md,
+// docs/addendum-a2-echo-response.md)。
 // 4/4 固定・1小節=4マスのビートグリッド (A1-1)。純関数のみ・副作用なし。
 // グリッドの展開 (expandGrid)・テンポ規則 (A1-4)・型全体の照合と採点
-// (scorePatternAttempt, A1-6) を担う。エンジンは展開結果を実時刻に写すだけで、
-// タイミング計測の作法は変えない (A1-2)。
+// (scorePatternAttempt, A1-6)・こだま応答の形採点 (scoreEchoShape, A2-4) を担う。
+// エンジンは展開結果を実時刻に写すだけで、タイミング計測の作法は変えない (A1-2)。
 
 import { scoreSync, type SyncGrade } from './scoring';
 
@@ -127,6 +128,25 @@ export function patternsInGroup(key: PatternGroupKey): PatternDef[] {
   return PATTERNS.filter((p) => p.group === key);
 }
 
+// --- こだま層の出題プール (A2-5) --------------------------------------------
+
+export function endsWithRest(cells: GridCell[]): boolean {
+  return cells[cells.length - 1] === 'rest';
+}
+
+/** 末尾が休符の型は子の最終打点で終端が定義できず、相対評価 (A2-4) では
+ *  測定不能。こだま層の出題プールから除外する (A2-5)。 */
+export const ECHO_PATTERNS: PatternDef[] = PATTERNS.filter((p) => !endsWithRest(p.cells));
+
+export function echoPatternsInGroup(key: PatternGroupKey): PatternDef[] {
+  return ECHO_PATTERNS.filter((p) => p.group === key);
+}
+
+/** 除外後に空になるグループ (L4 タ・・・) はこだまの選択肢にも出さない (A2-5)。 */
+export const ECHO_PATTERN_GROUPS = PATTERN_GROUPS.filter(
+  (g) => echoPatternsInGroup(g.key).length > 0,
+);
+
 // --- 型全体の照合・採点 (A1-6) ----------------------------------------------
 
 /** 照合窓: |async| / expectedIOI ≤ 0.5 で「対応する打点」とみなす。
@@ -206,4 +226,89 @@ export function scorePatternAttempt(
   const extraTaps = taps.filter((t) => !t.matched).length;
   const allTargetsHit = perTarget.length > 0 && perTarget.every((t) => t.hit);
   return { perTarget, taps, extraTaps, allTargetsHit, complete: allTargetsHit && extraTaps === 0 };
+}
+
+// --- こだま応答の形採点 (A2-4) ----------------------------------------------
+// 絶対時刻の一致でなく「1打目基準の相対比」で照合する。開始タイミングは子ども
+// 任意 (A2-3) で、テンポ (スケール s) が目標と違っても形が合えば正解。
+
+/** スケール妥当域: 子テンポが目標の 0.5〜2.0 倍を外れたら無効扱い (記録のみ・罰しない)。 */
+export const ECHO_SHAPE_SCALE_MIN = 0.5;
+export const ECHO_SHAPE_SCALE_MAX = 2.0;
+
+export interface EchoShapeOnset {
+  /** 小節頭からの期待時刻 (目標テンポ秒)。expandGrid の onsets をそのまま渡せる。 */
+  offsetSec: number;
+  /** 局所期待間隔 (A1-6 踏襲: 8分は IBI/2)。分母は s 倍して子テンポに写す。 */
+  expectedIoiSec: number;
+}
+
+export interface EchoShapeOnsetScore {
+  /** 子テンポ秒での符号付きずれ d[i] − s·e[i] (負=先取り/正=遅れ、符号約束は共通)。 */
+  diffSec: number;
+  /** r[i] = |diff| / (s × 局所期待間隔)。段階は既存の r≤0.15/≤0.30 を流用。 */
+  r: number;
+  grade: SyncGrade;
+}
+
+export interface EchoShapeScore {
+  /** false = 打点数が期待と違う =「形がちがった」。記録のみ・罰しない (A2-4)。 */
+  onsetCountMatch: boolean;
+  /** スパン比 s = d[n]/e[n] (子テンポ/目標)。打数不一致・スパン不成立は null。 */
+  scale: number | null;
+  /** s が妥当域 (0.5〜2.0倍) 内。外でも失敗表示はしない (記録のみ)。 */
+  scaleValid: boolean;
+  perOnset: EchoShapeOnsetScore[];
+  allWithinGood: boolean;
+  allPerfect: boolean;
+  /** 打数一致 かつ s 妥当 かつ 全打点 r ≤ 0.30。非成立でも罰には使わない。 */
+  ok: boolean;
+}
+
+/**
+ * 期待打点列と子のタップ列を、1打目を 0 とした相対時刻で照合する (A2-4)。
+ * s はスパン比 d[n]/e[n] の簡易推定。r[0] と r[n] は構成上 0 になる。
+ */
+export function scoreEchoShape(
+  expected: EchoShapeOnset[],
+  tapTimesSec: number[],
+): EchoShapeScore {
+  const onsetCountMatch = tapTimesSec.length === expected.length;
+  const none: EchoShapeScore = {
+    onsetCountMatch,
+    scale: null,
+    scaleValid: false,
+    perOnset: [],
+    allWithinGood: false,
+    allPerfect: false,
+    ok: false,
+  };
+  // 打点1つの型はスパンが定義できないが、末尾休符の除外 (A2-5) 後の
+  // こだまプールは常に2打点以上なので、実運用ではこの分岐に入らない。
+  if (!onsetCountMatch || expected.length < 2) return none;
+  const e0 = expected[0].offsetSec;
+  const e = expected.map((x) => x.offsetSec - e0);
+  const sorted = [...tapTimesSec].sort((a, b) => a - b);
+  const d = sorted.map((t) => t - sorted[0]);
+  const eSpan = e[e.length - 1];
+  const dSpan = d[d.length - 1];
+  if (eSpan <= 0 || dSpan <= 0) return none;
+  const scale = dSpan / eSpan;
+  const scaleValid = scale >= ECHO_SHAPE_SCALE_MIN && scale <= ECHO_SHAPE_SCALE_MAX;
+  const perOnset: EchoShapeOnsetScore[] = expected.map((x, i) => {
+    const diffSec = d[i] - scale * e[i];
+    const { r, grade } = scoreSync(diffSec, scale * x.expectedIoiSec);
+    return { diffSec, r, grade };
+  });
+  const allWithinGood = perOnset.every((o) => o.grade !== 'none');
+  const allPerfect = perOnset.every((o) => o.grade === 'perfect');
+  return {
+    onsetCountMatch,
+    scale,
+    scaleValid,
+    perOnset,
+    allWithinGood,
+    allPerfect,
+    ok: scaleValid && allWithinGood,
+  };
 }

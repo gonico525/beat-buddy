@@ -1,17 +1,26 @@
-// リズム型純関数のテスト (docs/addendum-a1-rhythm-patterns.md)。
-// グリッド展開・テンポ規則・型全体の照合/採点 (非対称の維持) を検証する。
+// リズム型純関数のテスト (docs/addendum-a1-rhythm-patterns.md,
+// docs/addendum-a2-echo-response.md)。
+// グリッド展開・テンポ規則・型全体の照合/採点 (非対称の維持)・こだま出題プール・
+// 形の採点 (A2) を検証する。
 
 import { describe, expect, it } from 'vitest';
 import {
+  ECHO_PATTERNS,
+  ECHO_PATTERN_GROUPS,
+  ECHO_SHAPE_SCALE_MAX,
+  ECHO_SHAPE_SCALE_MIN,
   GRID_CELLS,
   PATTERNS,
   PATTERN_GROUPS,
   PATTERN_MATCH_R,
   SPLIT_TEMPO_FACTOR,
+  echoPatternsInGroup,
+  endsWithRest,
   expandGrid,
   hasSplit,
   patternIbiSec,
   patternsInGroup,
+  scoreEchoShape,
   scorePatternAttempt,
   type GridCell,
 } from '../src/core/patterns';
@@ -155,5 +164,104 @@ describe('scorePatternAttempt (A1-6)', () => {
     expect(s.taps.filter((t) => t.matched)).toHaveLength(1);
     expect(s.extraTaps).toBe(1);
     expect(s.allTargetsHit).toBe(true);
+  });
+});
+
+describe('こだま出題プール (A2-5)', () => {
+  it('末尾が休符の型は除外され、10型が残る', () => {
+    expect(ECHO_PATTERNS.every((p) => !endsWithRest(p.cells))).toBe(true);
+    expect(ECHO_PATTERNS).toHaveLength(10);
+    expect(PATTERNS.filter((p) => endsWithRest(p.cells))).toHaveLength(6);
+  });
+
+  it('空になったグループ (L4 タ・・・) は選択肢から消える', () => {
+    expect(echoPatternsInGroup('pattern_gap_3')).toHaveLength(0);
+    expect(ECHO_PATTERN_GROUPS.map((g) => g.key)).toEqual([
+      'pattern_gap_0',
+      'pattern_gap_1',
+      'pattern_gap_2',
+      'pattern_split_1',
+      'pattern_split_2',
+    ]);
+  });
+
+  it('全出題型は打点2つ以上 (スパン比 s が定義できる)', () => {
+    for (const p of ECHO_PATTERNS) {
+      expect(expandGrid(p.cells, 0.5).onsets.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
+describe('scoreEchoShape (A2-4)', () => {
+  const ibi = 0.5;
+  // タ・タタ 相当: 期待打点 0 / 1.0 / 1.5 (局所IOI=IBI)
+  const expected = expandGrid(['hit', 'rest', 'hit', 'hit'], ibi).onsets;
+
+  it('完全再現: s=1・全打点 perfect・ok', () => {
+    const s = scoreEchoShape(expected, [0, 1.0, 1.5]);
+    expect(s.onsetCountMatch).toBe(true);
+    expect(s.scale).toBeCloseTo(1, 10);
+    expect(s.scaleValid).toBe(true);
+    expect(s.perOnset.every((o) => o.grade === 'perfect')).toBe(true);
+    expect(s.allPerfect).toBe(true);
+    expect(s.ok).toBe(true);
+  });
+
+  it('開始時刻は任意・テンポが違っても形が合えば正解 (A2-3, A2-4)', () => {
+    // 7秒後に開始・1.3倍遅いテンポで同じ形
+    const s = scoreEchoShape(expected, [7.0, 8.3, 8.95]);
+    expect(s.scale).toBeCloseTo(1.3, 10);
+    expect(s.allPerfect).toBe(true);
+    expect(s.ok).toBe(true);
+  });
+
+  it('スケール域外 (0.5未満/2.0超) は無効扱い・ok=false (罰には使わない)', () => {
+    const slow = scoreEchoShape(expected, [0, 2.2, 3.3]); // s=2.2
+    expect(slow.scale).toBeGreaterThan(ECHO_SHAPE_SCALE_MAX);
+    expect(slow.scaleValid).toBe(false);
+    expect(slow.ok).toBe(false);
+    const fast = scoreEchoShape(expected, [0, 0.5, 0.7]); // s≈0.467
+    expect(fast.scale).toBeLessThan(ECHO_SHAPE_SCALE_MIN);
+    expect(fast.scaleValid).toBe(false);
+    expect(fast.ok).toBe(false);
+  });
+
+  it('打点数不一致は「形がちがった」= 記録のみ (scale=null)', () => {
+    const s = scoreEchoShape(expected, [0, 1.0]);
+    expect(s.onsetCountMatch).toBe(false);
+    expect(s.scale).toBeNull();
+    expect(s.perOnset).toHaveLength(0);
+    expect(s.ok).toBe(false);
+  });
+
+  it('形ちがい (s妥当でも中間打点が外れ) は ok=false', () => {
+    const s = scoreEchoShape(expected, [0, 0.5, 1.5]); // s=1, 中間が -0.5 ずれ
+    expect(s.scaleValid).toBe(true);
+    expect(s.perOnset[1].grade).toBe('none');
+    expect(s.ok).toBe(false);
+  });
+
+  it('符号約束: 先取りは負・遅れは正 (子テンポ秒)', () => {
+    const s = scoreEchoShape(expected, [0, 0.94, 1.5]);
+    expect(s.perOnset[1].diffSec).toBeCloseTo(-0.06, 10);
+    expect(s.perOnset[1].grade).toBe('perfect'); // r=0.12
+  });
+
+  it('分母は局所期待間隔×s: 8分のずれは IBI/2 基準で採点', () => {
+    const withSplit = expandGrid(['hit', 'split', 'hit', 'hit'], ibi).onsets;
+    // 8分の2打目 (0.75) を 0.06 遅らせる → r = 0.06 / 0.25 = 0.24: good
+    // (分母が IBI なら r=0.12 で perfect になってしまう)
+    const s = scoreEchoShape(withSplit, [0, 0.5, 0.81, 1.0, 1.5]);
+    expect(s.scale).toBeCloseTo(1, 10);
+    expect(s.perOnset[2].r).toBeCloseTo(0.24, 10);
+    expect(s.perOnset[2].grade).toBe('good');
+    expect(s.ok).toBe(true);
+    expect(s.allPerfect).toBe(false);
+  });
+
+  it('スパン比の性質: 最初と最後の打点は構成上 r=0', () => {
+    const s = scoreEchoShape(expected, [0, 1.11, 1.62]);
+    expect(s.perOnset[0].r).toBeCloseTo(0, 10);
+    expect(s.perOnset[2].r).toBeCloseTo(0, 10);
   });
 });

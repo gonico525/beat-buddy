@@ -82,20 +82,33 @@ export function debugScreen(app: App): Screen {
     smtCard.append(el('p', { class: 'small-note', text: 'このセッションのSMT計測記録がありません。' }));
   }
 
-  // --- リズム型 (addendum A1-11): ターゲット打点ごとの async と余剰打点 ---
+  // --- リズム型 (addendum A2-6): 推定スケール s と各打点の相対誤差 r[i] ---
   const patEntries = log.filter((e) => e.mode === 'patternEcho');
   const patCard = el('div', { class: 'card' }, el('h2', { text: `リズム型 (n=${patEntries.length})` }));
   if (patEntries.length > 0) {
     const lines = patEntries.slice(-20).map((e) => {
-      const asyncs = ((e.data.targetAsyncsMs as (number | null)[]) ?? [])
-        .map((v) => (v === null ? '—' : `${v}`))
-        .join(', ');
-      const mark = e.data.complete ? ' ◎' : e.data.allTargetsHit ? ' ○' : '';
-      return `${e.data.gridId} (IBI ${e.data.ibiMs}ms) async [${asyncs}] ms / 余剰 ${e.data.extraTaps}${mark}`;
+      const head = `${e.data.gridId} (IBI ${e.data.ibiMs}ms)`;
+      if (!e.data.onsetCountMatch) {
+        return `${head} 打数 ${e.data.tapCount}/${e.data.expectedOnsets} (形ちがい・記録のみ)`;
+      }
+      const s = typeof e.data.scale === 'number' ? (e.data.scale as number).toFixed(2) : '—';
+      const rs = ((e.data.rs as number[]) ?? []).map((r) => r.toFixed(2)).join(', ');
+      const grades = (e.data.grades as string[]) ?? [];
+      const mark = e.data.ok
+        ? grades.every((g) => g === 'perfect')
+          ? ' ◎'
+          : ' ○'
+        : e.data.scaleValid === false
+          ? ' (s域外)'
+          : '';
+      return `${head} s=${s} r=[${rs}]${mark}`;
     });
     patCard.append(
       el('pre', { class: 'log-pre', text: lines.join('\n') }),
-      el('p', { class: 'small-note', text: '— = タップなし | ◎ 全打点+余剰なし | ○ 全打点 (負=先取り/正=遅れ)' }),
+      el('p', {
+        class: 'small-note',
+        text: 's=推定スケール (子テンポ/目標) | r=各打点の相対誤差 | ◎ 全部ぴったり | ○ 形一致 | s域外=テンポ極端 (記録のみ)',
+      }),
     );
   } else {
     patCard.append(el('p', { class: 'small-note', text: 'まだリズム型の記録がありません。' }));
